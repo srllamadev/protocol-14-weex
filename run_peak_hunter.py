@@ -335,8 +335,11 @@ class PeakHunterAuto:
             # ETH: stepSize 0.01
             size = round(position_value / price, 2)
         elif 'doge' in symbol:
-            # DOGE: stepSize 1
-            size = round(position_value / price, 0)
+            # DOGE: stepSize 100
+            raw_size = position_value / price
+            size = round(raw_size / 100) * 100  # Redondear a múltiplo de 100
+            if size < 100:
+                size = 100
         elif 'sol' in symbol:
             # SOL: stepSize 0.1
             raw_size = position_value / price
