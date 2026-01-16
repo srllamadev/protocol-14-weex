@@ -207,6 +207,33 @@ class WeexClient:
             print(f"❌ Failed to get ticker: {e}")
             raise
     
+    def get_candles(self, symbol: str = "cmt_btcusdt", granularity: str = "1m", limit: int = 100) -> Dict[str, Any]:
+        """
+        Get candlestick/kline data (public endpoint)
+        
+        Args:
+            symbol: Trading pair (e.g., "cmt_btcusdt")
+            granularity: Candle interval (1m, 5m, 15m, 30m, 1H, 4H, 1D, 1W)
+            limit: Number of candles (max 1000)
+            
+        Returns:
+            Candlestick data with [timestamp, open, high, low, close, volume]
+        """
+        try:
+            response = self.session.get(
+                f"{self.BASE_URL}/capi/v2/market/candles",
+                params={
+                    "symbol": symbol,
+                    "granularity": granularity,
+                    "limit": limit
+                },
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            print(f"❌ Failed to get candles: {e}")
+            raise
+    
     def get_contracts(self) -> Dict[str, Any]:
         """
         Get available contracts/trading pairs (public endpoint)
