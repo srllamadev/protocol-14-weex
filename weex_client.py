@@ -344,19 +344,31 @@ class WeexClient:
         Returns:
             Order response with order ID
         """
+        import uuid
+        import time
+        
+        # Generar client_oid si no se proporciona (requerido por WEEX)
+        if not client_oid:
+            client_oid = f"scalper_{int(time.time())}"
+        
+        # Mapear side a type numérico
+        # 1 = open_long, 2 = open_short, 3 = close_long, 4 = close_short
+        type_map = {
+            'open_long': '1',
+            'open_short': '2', 
+            'close_long': '3',
+            'close_short': '4',
+        }
+        order_type_num = type_map.get(side, '1')
+        
         order_data = {
             "symbol": symbol,
-            "marginCoin": margin_coin,
+            "client_oid": client_oid,
             "size": size,
-            "side": side,
-            "orderType": order_type.lower(),
+            "type": order_type_num,
+            "order_type": "0",     # Normal order
+            "match_price": "1",    # Market order (1 = use market price)
         }
-        
-        if price and order_type.lower() == "limit":
-            order_data["price"] = price
-            
-        if client_oid:
-            order_data["clientOid"] = client_oid
         
         return self._request("POST", "/capi/v2/order/placeOrder", data=order_data)
     
@@ -385,7 +397,7 @@ class WeexClient:
         if client_oid:
             cancel_data["clientOid"] = client_oid
         
-        return self._request("POST", "/capi/v2/order/cancelOrder", data=cancel_data)
+        return self._request("POST", "/capi/v2/order/cancel_order", data=cancel_data)
     
     def cancel_all_orders(self, symbol: str, 
                           margin_coin: str = "USDT") -> Dict[str, Any]:
@@ -399,7 +411,7 @@ class WeexClient:
         Returns:
             Cancellation response
         """
-        return self._request("POST", "/capi/v2/order/cancelAllOrder", data={
+        return self._request("POST", "/capi/v2/order/cancel_all_order", data={
             "symbol": symbol,
             "marginCoin": margin_coin,
         })

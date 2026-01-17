@@ -17,7 +17,7 @@ def sign(method, path, query=''):
 def headers(ts, sig):
     return {'ACCESS-KEY': API_KEY, 'ACCESS-SIGN': sig, 'ACCESS-TIMESTAMP': ts, 'ACCESS-PASSPHRASE': PASSPHRASE}
 
-symbols = ['cmt_solusdt', 'cmt_bnbusdt', 'cmt_btcusdt']
+symbols = ['cmt_solusdt', 'cmt_bnbusdt', 'cmt_btcusdt', 'cmt_ethusdt', 'cmt_adausdt', 'cmt_dogeusdt', 'cmt_ltcusdt']
 
 print("=== POSICIONES ABIERTAS ===")
 for symbol in symbols:

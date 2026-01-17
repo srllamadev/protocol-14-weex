@@ -15,6 +15,7 @@ Configuración:
 import sys
 import time
 import json
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -25,18 +26,18 @@ from weex_client import WeexClient
 # ═══════════════════════════════════════════════════════════════
 # CONFIGURACIÓN AGRESIVA
 # ═══════════════════════════════════════════════════════════════
-TRADE_SIZE_USD = 80          # $80 por trade
-LEVERAGE = 15                # 15x apalancamiento
+TRADE_SIZE_USD = 30          # $30 por trade (reducido para permitir más trades)
+LEVERAGE = 20                # 20x apalancamiento = $600 exposición
 RSI_OVERSOLD = 30            # RSI < 30 = LONG
 RSI_OVERBOUGHT = 70          # RSI > 70 = SHORT
-STOP_LOSS_PCT = 3.0          # 3% stop loss
-TAKE_PROFIT_PCT = 6.0        # 6% take profit
-TRAILING_STOP_PCT = 2.0      # 2% trailing (se activa cuando hay +2% ganancia)
-TRAILING_ACTIVATION = 1.5    # Activar trailing después de +1.5%
-SCAN_INTERVAL = 20           # Escanear cada 20 segundos
+STOP_LOSS_PCT = 2.5          # 2.5% stop loss (más ajustado)
+TAKE_PROFIT_PCT = 5.0        # 5% take profit
+TRAILING_STOP_PCT = 1.5      # 1.5% trailing (se activa cuando hay +2% ganancia)
+TRAILING_ACTIVATION = 1.0    # Activar trailing después de +1%
+SCAN_INTERVAL = 15           # Escanear cada 15 segundos (más rápido)
 MAX_POSITIONS_PER_COIN = 2   # Máximo 2 posiciones por moneda
-MAX_TOTAL_POSITIONS = 8      # Máximo 8 posiciones totales
-COOLDOWN_SECONDS = 180       # 3 minutos entre trades misma moneda
+MAX_TOTAL_POSITIONS = 10     # Máximo 10 posiciones totales
+COOLDOWN_SECONDS = 120       # 2 minutos entre trades misma moneda
 
 # Monedas a tradear
 COINS = ['SOL', 'ETH', 'BNB', 'DOGE', 'ADA', 'LTC']
@@ -207,31 +208,35 @@ class MomentumScalper:
         if signal == 'long':
             stop_loss = round(price * (1 - STOP_LOSS_PCT / 100), 6)
             take_profit = round(price * (1 + TAKE_PROFIT_PCT / 100), 6)
-            side = 'long'
+            side = 'open_long'
         else:
             stop_loss = round(price * (1 + STOP_LOSS_PCT / 100), 6)
             take_profit = round(price * (1 - TAKE_PROFIT_PCT / 100), 6)
-            side = 'short'
+            side = 'open_short'
         
-        # Ejecutar orden
+        # Ejecutar orden de mercado
         result = self.client.place_order(
             symbol=symbol,
             side=side,
-            size=size,
-            price=None,  # Market order
-            leverage=LEVERAGE
+            order_type='market',
+            size=str(size),
+            margin_coin='USDT',
+            client_oid=str(uuid.uuid4())
         )
         
-        if result and 'data' in result and result['data'].get('orderId'):
-            order_id = result['data']['orderId']
-            
+        # Verificar respuesta - WEEX devuelve order_id directamente o en data
+        order_id = None
+        if result:
+            order_id = result.get('order_id') or (result.get('data', {}) or {}).get('orderId')
+        
+        if order_id:
             # Registrar para trailing stop
             self.trailing_stops[order_id] = {
                 'symbol': symbol,
-                'side': side,
+                'side': signal,  # 'long' o 'short'
                 'entry_price': price,
-                'highest': price if side == 'long' else price,
-                'lowest': price if side == 'short' else price,
+                'highest': price if signal == 'long' else price,
+                'lowest': price if signal == 'short' else price,
                 'trailing_active': False,
                 'size': size
             }
@@ -251,6 +256,9 @@ class MomentumScalper:
             }
         else:
             error = result.get('msg', 'Unknown error') if result else 'No response'
+            # Si es error de margen, no crashear
+            if 'margin' in str(error).lower() or 'not enough' in str(error).lower():
+                print(f"   ⚠️ Margen insuficiente, saltando...")
             return {'success': False, 'error': error}
     
     def check_trailing_stops(self):
@@ -292,10 +300,11 @@ class MomentumScalper:
                             # Cerrar posición
                             close_result = self.client.place_order(
                                 symbol=symbol,
-                                side='short',  # Cerrar long con short
-                                size=data['size'],
-                                price=None,
-                                leverage=LEVERAGE
+                                side='close_long',
+                                order_type='market',
+                                size=str(data['size']),
+                                margin_coin='USDT',
+                                client_oid=str(uuid.uuid4())
                             )
                             if close_result and 'data' in close_result:
                                 profit = (current_price - entry_price) * data['size']
@@ -307,10 +316,11 @@ class MomentumScalper:
                     elif pnl_pct <= -STOP_LOSS_PCT:
                         close_result = self.client.place_order(
                             symbol=symbol,
-                            side='short',
-                            size=data['size'],
-                            price=None,
-                            leverage=LEVERAGE
+                            side='close_long',
+                            order_type='market',
+                            size=str(data['size']),
+                            margin_coin='USDT',
+                            client_oid=str(uuid.uuid4())
                         )
                         if close_result and 'data' in close_result:
                             loss = (current_price - entry_price) * data['size']
@@ -322,10 +332,11 @@ class MomentumScalper:
                     elif pnl_pct >= TAKE_PROFIT_PCT:
                         close_result = self.client.place_order(
                             symbol=symbol,
-                            side='short',
-                            size=data['size'],
-                            price=None,
-                            leverage=LEVERAGE
+                            side='close_long',
+                            order_type='market',
+                            size=str(data['size']),
+                            margin_coin='USDT',
+                            client_oid=str(uuid.uuid4())
                         )
                         if close_result and 'data' in close_result:
                             profit = (current_price - entry_price) * data['size']
@@ -351,10 +362,11 @@ class MomentumScalper:
                         if drawdown >= TRAILING_STOP_PCT:
                             close_result = self.client.place_order(
                                 symbol=symbol,
-                                side='long',  # Cerrar short con long
-                                size=data['size'],
-                                price=None,
-                                leverage=LEVERAGE
+                                side='close_short',
+                                order_type='market',
+                                size=str(data['size']),
+                                margin_coin='USDT',
+                                client_oid=str(uuid.uuid4())
                             )
                             if close_result and 'data' in close_result:
                                 profit = (entry_price - current_price) * data['size']
@@ -366,10 +378,11 @@ class MomentumScalper:
                     elif pnl_pct <= -STOP_LOSS_PCT:
                         close_result = self.client.place_order(
                             symbol=symbol,
-                            side='long',
-                            size=data['size'],
-                            price=None,
-                            leverage=LEVERAGE
+                            side='close_short',
+                            order_type='market',
+                            size=str(data['size']),
+                            margin_coin='USDT',
+                            client_oid=str(uuid.uuid4())
                         )
                         if close_result and 'data' in close_result:
                             loss = (entry_price - current_price) * data['size']
@@ -381,10 +394,11 @@ class MomentumScalper:
                     elif pnl_pct >= TAKE_PROFIT_PCT:
                         close_result = self.client.place_order(
                             symbol=symbol,
-                            side='long',
-                            size=data['size'],
-                            price=None,
-                            leverage=LEVERAGE
+                            side='close_short',
+                            order_type='market',
+                            size=str(data['size']),
+                            margin_coin='USDT',
+                            client_oid=str(uuid.uuid4())
                         )
                         if close_result and 'data' in close_result:
                             profit = (entry_price - current_price) * data['size']
