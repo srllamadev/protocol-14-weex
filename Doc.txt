@@ -1,0 +1,754 @@
+================================================================================
+           PROTOCOL-14 WEEX AI TRADING BOT - TECHNICAL DOCUMENTATION
+                    AI-Powered Algorithmic Trading System
+                         WEEX AI Trading Hackathon 2026
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+1. INTRODUCTION AND VISION
+2. ALGORITHMIC ARCHITECTURE OVERVIEW
+3. TRADING ALGORITHMS IN DETAIL
+   3.1 Grid Trading Algorithm
+   3.2 Peak Hunter Algorithm
+   3.3 Momentum Scalper Algorithm
+4. TECHNICAL INDICATORS ENGINE
+   4.1 RSI (Relative Strength Index)
+   4.2 MACD (Moving Average Convergence Divergence)
+   4.3 Combined Signal System
+5. DEEPSEEK AI INTEGRATION
+   5.1 How DeepSeek Enhances Trading Decisions
+   5.2 Sentiment Analysis Pipeline
+   5.3 AI-Powered Trade Recommendations
+   5.4 Contrarian Strategy with AI
+6. PROFIT MAXIMIZATION LOGIC
+   6.1 Multi-Layer Decision Framework
+   6.2 Risk-Reward Optimization
+   6.3 Dynamic Position Sizing
+7. RISK MANAGEMENT SYSTEM
+8. SYSTEM FLOW AND DECISION PIPELINE
+9. CONCLUSION
+
+================================================================================
+1. INTRODUCTION AND VISION
+================================================================================
+
+Protocol-14 is an advanced AI-powered algorithmic trading system designed for 
+the WEEX cryptocurrency futures exchange. Our vision is to combine traditional 
+quantitative trading strategies with cutting-edge AI technology to create a 
+robust, profitable, and risk-managed trading solution.
+
+KEY INNOVATION AREAS:
+- Multi-strategy approach for different market conditions
+- AI sentiment analysis using DeepSeek for market intelligence
+- Adaptive algorithms that respond to volatility
+- Comprehensive risk management with automated safeguards
+
+================================================================================
+2. ALGORITHMIC ARCHITECTURE OVERVIEW
+================================================================================
+
+Our system implements a layered architecture where each component works 
+together to maximize trading performance:
+
+                    ┌─────────────────────────────────────┐
+                    │         MARKET DATA FEED            │
+                    │    (Price, Volume, Order Book)      │
+                    └─────────────────┬───────────────────┘
+                                      │
+                    ┌─────────────────▼───────────────────┐
+                    │     TECHNICAL ANALYSIS ENGINE       │
+                    │      (RSI, MACD, Volume, Trend)     │
+                    └─────────────────┬───────────────────┘
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         │                            │                            │
+         ▼                            ▼                            ▼
+┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
+│  GRID TRADING   │        │  PEAK HUNTER    │        │   MOMENTUM      │
+│   ALGORITHM     │        │   ALGORITHM     │        │    SCALPER      │
+│                 │        │                 │        │                 │
+│ Best for:       │        │ Best for:       │        │ Best for:       │
+│ Sideways/Range  │        │ Reversals       │        │ Trending        │
+└────────┬────────┘        └────────┬────────┘        └────────┬────────┘
+         │                          │                          │
+         └──────────────────────────┼──────────────────────────┘
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │      DEEPSEEK AI ENGINE       │
+                    │   (Sentiment & Confirmation)  │
+                    └───────────────┬───────────────┘
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │      RISK MANAGEMENT          │
+                    │  (Position Sizing, SL/TP)     │
+                    └───────────────┬───────────────┘
+                                    │
+                    ┌───────────────▼───────────────┐
+                    │      ORDER EXECUTION          │
+                    │     (WEEX API Client)         │
+                    └───────────────────────────────┘
+
+
+================================================================================
+3. TRADING ALGORITHMS IN DETAIL
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 GRID TRADING ALGORITHM
+--------------------------------------------------------------------------------
+
+PURPOSE:
+The Grid Trading algorithm is designed to profit from normal price oscillations
+in ranging/sideways markets. It places multiple buy and sell orders at fixed
+price intervals, capturing profit as price bounces between levels.
+
+HOW IT WORKS:
+
+Step 1: Grid Initialization
+   - Calculate center price from current market price
+   - Define grid levels above and below center
+   - Calculate spacing between each level (default: 0.5%)
+
+Step 2: Order Placement
+   - Place BUY orders BELOW current price (catch dips)
+   - Place SELL orders ABOVE current price (catch pumps)
+   - Each order has equal USD value (default: $10)
+
+Step 3: Order Execution Flow
+   When a BUY order fills:
+      → Price dropped to our buy level
+      → We now hold a position
+      → The corresponding SELL order above will close it for profit
+   
+   When a SELL order fills:
+      → Price rose to our sell level
+      → We captured the grid profit
+      → System places new orders to maintain the grid
+
+MATHEMATICAL MODEL:
+
+   Grid Levels = Center Price × (1 ± Spacing × Level_Number)
+
+   Example for BTC at $95,000, 3 levels, 0.5% spacing:
+   
+   SELL LEVELS:              BUY LEVELS:
+   Level 3: $96,425 (+1.5%)  Level 3: $93,575 (-1.5%)
+   Level 2: $95,950 (+1.0%)  Level 2: $94,050 (-1.0%)
+   Level 1: $95,475 (+0.5%)  Level 1: $94,525 (-0.5%)
+                    
+                    CENTER: $95,000
+
+   Potential profit per cycle: 0.5% - 1.5% depending on volatility
+
+FILTER INTEGRATION:
+The Grid algorithm uses RSI/MACD filters to avoid placing grids in:
+- Strongly trending markets (where price might break through all levels)
+- Extremely overbought/oversold conditions
+- High volatility periods (detected by unusual candle sizes)
+
+CODE IMPLEMENTATION:
+   
+   def calculate_grid_levels(self, center_price: float):
+       levels = self.config['grid_levels']
+       spacing = self.config['grid_spacing_percent'] / 100
+       
+       buy_levels = []
+       sell_levels = []
+       
+       for i in range(1, levels + 1):
+           buy_price = center_price * (1 - spacing * i)
+           sell_price = center_price * (1 + spacing * i)
+           buy_levels.append(buy_price)
+           sell_levels.append(sell_price)
+       
+       return {'buy': buy_levels, 'sell': sell_levels}
+
+--------------------------------------------------------------------------------
+3.2 PEAK HUNTER ALGORITHM
+--------------------------------------------------------------------------------
+
+PURPOSE:
+The Peak Hunter algorithm detects extreme market conditions (peaks and valleys)
+to execute reversal trades. It identifies overbought conditions for SHORT
+positions and oversold conditions for LONG positions.
+
+CORE PHILOSOPHY:
+"What goes up must come down, and what goes down must come up."
+This algorithm is based on the mean-reversion principle - prices tend to 
+return to their average after extreme moves.
+
+SIGNAL DETECTION SYSTEM:
+
+For SHORT Signals (Peak Detection):
+┌─────────────────────────────────────────────────────────────┐
+│  CONDITION                      │  SIGNAL STRENGTH POINTS  │
+├─────────────────────────────────┼──────────────────────────┤
+│  RSI > 70 (Overbought)          │  +40 points              │
+│  Price up >5% from 24h low      │  +up to 30 points        │
+│  Price within 2% of 24h high    │  +20 points              │
+│  Volume spike detected          │  +10 points              │
+│  DeepSeek says "very bullish"   │  +15 points (contrarian) │
+└─────────────────────────────────┴──────────────────────────┘
+
+For LONG Signals (Valley Detection):
+┌─────────────────────────────────────────────────────────────┐
+│  CONDITION                      │  SIGNAL STRENGTH POINTS  │
+├─────────────────────────────────┼──────────────────────────┤
+│  RSI < 30 (Oversold)            │  +40 points              │
+│  Price down >5% from 24h high   │  +up to 30 points        │
+│  Price within 2% of 24h low     │  +20 points              │
+│  Volume spike detected          │  +10 points              │
+│  DeepSeek says "very bearish"   │  +15 points (contrarian) │
+└─────────────────────────────────┴──────────────────────────┘
+
+MINIMUM SIGNAL THRESHOLD: 60 points for trade execution
+
+COIN SELECTION BY VOLATILITY:
+We prioritize volatile coins because they produce more extreme moves:
+
+🔥 HIGH VOLATILITY (Best for Peak Hunting):
+   - DOGE/USDT - Meme coin, extreme swings
+   - SOL/USDT  - Fast ecosystem, high activity
+   - XRP/USDT  - News-driven volatility
+
+🟡 MEDIUM VOLATILITY:
+   - ADA/USDT  - Solid fundamentals, moderate moves
+   - LTC/USDT  - Follows BTC with amplification
+
+🟢 LOWER VOLATILITY (Safer but fewer opportunities):
+   - ETH/USDT  - Large cap, more stable
+   - BTC/USDT  - Most stable major crypto
+
+ENTRY/EXIT LOGIC:
+
+   SHORT Entry:
+      Entry Price:   Current price
+      Stop Loss:     +2% above entry (protect against continued pump)
+      Take Profit:   -3% below entry (capture the reversal)
+      Risk/Reward:   1:1.5
+
+   LONG Entry:
+      Entry Price:   Current price
+      Stop Loss:     -2% below entry (protect against continued dump)
+      Take Profit:   +3% above entry (capture the bounce)
+      Risk/Reward:   1:1.5
+
+--------------------------------------------------------------------------------
+3.3 MOMENTUM SCALPER ALGORITHM
+--------------------------------------------------------------------------------
+
+PURPOSE:
+Quick in-and-out trades that capture short-term price momentum. Unlike Peak
+Hunter which fights the trend, Momentum Scalper rides the trend.
+
+STRATEGY:
+- Identify strong short-term momentum using multiple timeframes
+- Enter in the direction of momentum
+- Exit quickly with small profits (0.3% - 1%)
+- High frequency, low profit per trade approach
+
+================================================================================
+4. TECHNICAL INDICATORS ENGINE
+================================================================================
+
+Our technical analysis engine provides the foundational signals that all
+trading algorithms rely upon.
+
+--------------------------------------------------------------------------------
+4.1 RSI (RELATIVE STRENGTH INDEX)
+--------------------------------------------------------------------------------
+
+WHAT IT MEASURES:
+RSI measures the speed and magnitude of recent price changes to evaluate
+overbought or oversold conditions. Range: 0 to 100.
+
+CALCULATION:
+                        100
+   RSI = 100 - ─────────────────
+                1 + (AvgGain/AvgLoss)
+
+   Where:
+   - AvgGain = Average of all UP moves in last N periods
+   - AvgLoss = Average of all DOWN moves in last N periods
+   - N = 14 (standard period)
+
+SIGNAL INTERPRETATION:
+   RSI > 70  → OVERBOUGHT → Potential SELL signal
+   RSI < 30  → OVERSOLD   → Potential BUY signal
+   RSI 40-60 → NEUTRAL    → No clear signal
+
+OUR ENHANCED IMPLEMENTATION:
+We calculate signal strength based on how extreme the RSI is:
+
+   def calculate_rsi(self, prices, period=14):
+       deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+       gains = [d if d > 0 else 0 for d in deltas]
+       losses = [-d if d < 0 else 0 for d in deltas]
+       
+       avg_gain = sum(gains[-period:]) / period
+       avg_loss = sum(losses[-period:]) / period
+       
+       if avg_loss == 0:
+           return 100.0
+       
+       rs = avg_gain / avg_loss
+       rsi = 100 - (100 / (1 + rs))
+       
+       # Signal strength calculation
+       if rsi >= 70:
+           strength = min((rsi - 70) * 3.33, 100)  # Stronger at extremes
+       elif rsi <= 30:
+           strength = min((30 - rsi) * 3.33, 100)
+       else:
+           strength = 50 - abs(50 - rsi)
+       
+       return rsi, strength
+
+--------------------------------------------------------------------------------
+4.2 MACD (MOVING AVERAGE CONVERGENCE DIVERGENCE)
+--------------------------------------------------------------------------------
+
+WHAT IT MEASURES:
+MACD shows the relationship between two exponential moving averages (EMAs).
+It reveals changes in trend strength, direction, momentum, and duration.
+
+COMPONENTS:
+- MACD Line:    Fast EMA (12) - Slow EMA (26)
+- Signal Line:  9-period EMA of MACD Line
+- Histogram:    MACD Line - Signal Line
+
+SIGNAL INTERPRETATION:
+   MACD crosses ABOVE Signal → BULLISH crossover → BUY signal
+   MACD crosses BELOW Signal → BEARISH crossover → SELL signal
+   Histogram growing         → Momentum increasing
+   Histogram shrinking       → Momentum decreasing
+
+COMBINED WITH RSI:
+We use MACD to CONFIRM RSI signals:
+- RSI Oversold + MACD Bullish Crossover = STRONG BUY
+- RSI Overbought + MACD Bearish Crossover = STRONG SELL
+- Conflicting signals = WAIT
+
+--------------------------------------------------------------------------------
+4.3 COMBINED SIGNAL SYSTEM
+--------------------------------------------------------------------------------
+
+Our system aggregates multiple indicators into a unified signal:
+
+   COMBINED_SIGNAL = (RSI_Weight × RSI_Signal) + 
+                     (MACD_Weight × MACD_Signal) + 
+                     (AI_Weight × DeepSeek_Signal)
+
+Default Weights:
+- RSI:      40%
+- MACD:     30%
+- DeepSeek: 30%
+
+Signal Confidence = Weighted average of individual confidences
+
+================================================================================
+5. DEEPSEEK AI INTEGRATION
+================================================================================
+
+DeepSeek AI is our secret weapon for understanding market sentiment beyond
+what traditional technical analysis can reveal.
+
+--------------------------------------------------------------------------------
+5.1 HOW DEEPSEEK ENHANCES TRADING DECISIONS
+--------------------------------------------------------------------------------
+
+TRADITIONAL TECHNICAL ANALYSIS LIMITATIONS:
+- Only analyzes historical price/volume data
+- Cannot understand news, events, or social sentiment
+- Misses context about market conditions
+- Lags behind fast-moving information
+
+DEEPSEEK AI ADVANTAGES:
+- Understands natural language market commentary
+- Analyzes sentiment from multiple sources
+- Provides contextual market understanding
+- Can reason about cause-and-effect relationships
+
+INTEGRATION POINTS:
+1. Trade Confirmation    - AI confirms/denies technical signals
+2. Risk Assessment       - AI evaluates current market risk
+3. Contrarian Signals    - AI extreme bullish = potential top
+4. News Impact Analysis  - AI assesses how news affects specific coins
+
+--------------------------------------------------------------------------------
+5.2 SENTIMENT ANALYSIS PIPELINE
+--------------------------------------------------------------------------------
+
+Our DeepSeek integration follows this pipeline:
+
+   STEP 1: Data Collection
+   ┌────────────────────────────────────────┐
+   │  - Current price and recent changes   │
+   │  - Volume patterns                     │
+   │  - Technical indicator values          │
+   │  - Market context and conditions       │
+   └───────────────────┬────────────────────┘
+                       │
+   STEP 2: AI Prompt Construction
+   ┌───────────────────▼────────────────────┐
+   │  System Prompt: "You are a crypto      │
+   │  analyst. Analyze sentiment..."        │
+   │                                        │
+   │  User Prompt: "Current BTC price is    │
+   │  $95,000, RSI is 72, up 3% today..."  │
+   └───────────────────┬────────────────────┘
+                       │
+   STEP 3: DeepSeek API Call
+   ┌───────────────────▼────────────────────┐
+   │  POST https://api.deepseek.com/v1/     │
+   │       chat/completions                 │
+   │  Model: deepseek-chat                  │
+   │  Temperature: 0.3 (consistent output)  │
+   └───────────────────┬────────────────────┘
+                       │
+   STEP 4: Response Parsing
+   ┌───────────────────▼────────────────────┐
+   │  JSON Response:                        │
+   │  {                                     │
+   │    "sentiment": "bullish",             │
+   │    "score": 65,                        │
+   │    "confidence": 75,                   │
+   │    "summary": "Market showing...",     │
+   │    "factors": ["factor1", "factor2"]   │
+   │  }                                     │
+   └───────────────────┬────────────────────┘
+                       │
+   STEP 5: Signal Integration
+   ┌───────────────────▼────────────────────┐
+   │  Combine with technical signals to     │
+   │  make final trading decision           │
+   └────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+5.3 AI-POWERED TRADE RECOMMENDATIONS
+--------------------------------------------------------------------------------
+
+DeepSeek can provide direct trade recommendations:
+
+REQUEST EXAMPLE:
+   "Analyze this trading opportunity:
+    Symbol: BTC/USDT
+    Current Price: $95,000
+    RSI: 72
+    MACD Signal: Bullish crossover
+    Trend: Uptrend
+    Should I enter a trade?"
+
+RESPONSE FORMAT:
+   {
+     "action": "hold",  // buy, sell, or hold
+     "confidence": 65,
+     "reason": "RSI overbought but MACD still bullish, wait for confirmation",
+     "risk_level": "medium",
+     "suggested_sl_percent": 2.0,
+     "suggested_tp_percent": 4.0
+   }
+
+HOW WE USE THIS:
+- Action matches our technical signal → INCREASE position size
+- Action contradicts our signal → REDUCE position size or SKIP trade
+- Confidence < 50 → WAIT for clearer conditions
+
+--------------------------------------------------------------------------------
+5.4 CONTRARIAN STRATEGY WITH AI
+--------------------------------------------------------------------------------
+
+One of our most powerful uses of DeepSeek is the CONTRARIAN strategy.
+
+THE PSYCHOLOGY:
+When EVERYONE is bullish, who is left to buy?
+When EVERYONE is bearish, who is left to sell?
+
+Extreme sentiment often precedes reversals!
+
+IMPLEMENTATION:
+
+   def apply_contrarian_logic(self, ai_sentiment, technical_signal):
+       # AI says "very bullish" with high confidence
+       if ai_sentiment == "bullish" and confidence > 80:
+           # This could indicate a peak - prepare for SHORT
+           contrarian_signal = "potential_short"
+           boost = +15  # Add points to Peak Hunter SHORT signal
+       
+       # AI says "very bearish" with high confidence
+       elif ai_sentiment == "bearish" and confidence > 80:
+           # This could indicate a bottom - prepare for LONG
+           contrarian_signal = "potential_long"
+           boost = +15  # Add points to Peak Hunter LONG signal
+       
+       return contrarian_signal, boost
+
+EXAMPLE SCENARIO:
+   - DOGE pumps 15% in 4 hours
+   - RSI reaches 82 (overbought)
+   - Everyone on social media is bullish
+   - DeepSeek confirms: "Extremely bullish, 90% confidence"
+   
+   Our Contrarian Response:
+   - This is EXACTLY when we prepare a SHORT position
+   - Signal strength: RSI(40) + PriceChange(30) + NearHigh(20) + AIContrarian(15) = 105
+   - Execute SHORT with tight stop-loss
+
+================================================================================
+6. PROFIT MAXIMIZATION LOGIC
+================================================================================
+
+--------------------------------------------------------------------------------
+6.1 MULTI-LAYER DECISION FRAMEWORK
+--------------------------------------------------------------------------------
+
+Our profit maximization comes from a sophisticated multi-layer approach:
+
+LAYER 1: MARKET CONDITION CLASSIFICATION
+   ┌─────────────────────────────────────────────────────────┐
+   │  Analyze current market state:                         │
+   │  - TRENDING (up or down): Use Momentum Scalper         │
+   │  - RANGING (sideways): Use Grid Trading                │
+   │  - VOLATILE (extreme moves): Use Peak Hunter           │
+   └─────────────────────────────────────────────────────────┘
+
+LAYER 2: SIGNAL STRENGTH AGGREGATION
+   ┌─────────────────────────────────────────────────────────┐
+   │  Combine signals from multiple sources:                │
+   │  - Technical (RSI, MACD)         Weight: 40%          │
+   │  - DeepSeek AI                    Weight: 30%          │
+   │  - Price Action                   Weight: 20%          │
+   │  - Volume Analysis                Weight: 10%          │
+   └─────────────────────────────────────────────────────────┘
+
+LAYER 3: CONFIDENCE THRESHOLD
+   ┌─────────────────────────────────────────────────────────┐
+   │  Final Signal Strength determines action:              │
+   │  - 80-100: Execute FULL position size                  │
+   │  - 60-79:  Execute HALF position size                  │
+   │  - 40-59:  Execute QUARTER position size               │
+   │  - Below 40: DO NOT TRADE (wait for better setup)      │
+   └─────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+6.2 RISK-REWARD OPTIMIZATION
+--------------------------------------------------------------------------------
+
+We always maintain a favorable risk-reward ratio:
+
+MINIMUM RISK-REWARD: 1:1.5
+   - Risk 2% to gain 3% minimum
+   - Never enter trades with R:R below 1:1.5
+
+DYNAMIC ADJUSTMENT:
+   High Confidence Signal (>80):
+      - SL: 2.5% (slightly wider to avoid noise)
+      - TP: 5% (larger target since confident)
+      - R:R = 1:2
+   
+   Medium Confidence Signal (60-80):
+      - SL: 2%
+      - TP: 3%
+      - R:R = 1:1.5
+   
+   Lower Confidence Signal (40-60):
+      - SL: 1.5% (tighter to limit risk)
+      - TP: 2.5%
+      - R:R = 1:1.67
+
+TRAILING STOP LOGIC:
+Once in profit, we protect gains:
+   - Price moves 1.5% in our favor → Move SL to breakeven
+   - Price moves 3% in our favor → Move SL to +1.5%
+   - Continue trailing to lock in profits
+
+--------------------------------------------------------------------------------
+6.3 DYNAMIC POSITION SIZING
+--------------------------------------------------------------------------------
+
+Position size adapts to signal quality and account status:
+
+BASE CALCULATION:
+   Position Size = (Account Balance × Risk %) / Stop Loss Distance
+
+DYNAMIC ADJUSTMENTS:
+
+   Win Streak (3+ consecutive wins):
+      - Increase size by 25% (confidence is high)
+      - Cap at 150% of normal size
+   
+   Loss Streak (3+ consecutive losses):
+      - Decrease size by 50% (protect capital)
+      - Minimum 25% of normal size
+   
+   High Volatility:
+      - Decrease size by 25% (wider stops needed)
+   
+   Low Volatility:
+      - Can increase size slightly (tighter stops possible)
+
+KELLY CRITERION (Advanced):
+For optimal growth, we consider the Kelly formula:
+
+   f* = (p × b - q) / b
+   
+   Where:
+   - f* = fraction of capital to risk
+   - p = probability of winning
+   - b = ratio of win to loss
+   - q = probability of losing (1-p)
+   
+   Example: 60% win rate, 1.5:1 R:R
+   f* = (0.6 × 1.5 - 0.4) / 1.5 = 0.33
+   
+   We use HALF-KELLY (16.5%) for safety
+
+================================================================================
+7. RISK MANAGEMENT SYSTEM
+================================================================================
+
+Risk management is our TOP PRIORITY. No strategy works without it.
+
+HARD LIMITS:
+┌─────────────────────────────────────────────────────────────┐
+│  LIMIT                          │  VALUE                   │
+├─────────────────────────────────┼──────────────────────────┤
+│  Max Position Size              │  $100 per trade          │
+│  Max Total Exposure             │  $500 all positions      │
+│  Max Leverage                   │  5x                      │
+│  Max Daily Loss                 │  $50 (then stop trading) │
+│  Max Daily Trades               │  50 trades               │
+│  Default Stop Loss              │  2%                      │
+│  Default Take Profit            │  3%                      │
+│  Minimum Balance to Trade       │  $50                     │
+└─────────────────────────────────┴──────────────────────────┘
+
+AUTOMATIC SAFEGUARDS:
+1. Daily loss limit stops all trading if exceeded
+2. Position size automatically calculated to not exceed limits
+3. Stop-loss is MANDATORY on every position
+4. System checks balance before each trade
+5. Exposure across all positions tracked in real-time
+
+================================================================================
+8. SYSTEM FLOW AND DECISION PIPELINE
+================================================================================
+
+Complete flow from market data to trade execution:
+
+   ┌───────────────────────────────────────────────────────────────────┐
+   │                         START NEW CYCLE                           │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+   ┌───────────────────────────────▼───────────────────────────────────┐
+   │  STEP 1: Fetch Market Data                                        │
+   │  - Current price from WEEX API                                    │
+   │  - Last 50 candles for indicator calculation                      │
+   │  - 24h high/low for range analysis                                │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+   ┌───────────────────────────────▼───────────────────────────────────┐
+   │  STEP 2: Calculate Technical Indicators                          │
+   │  - RSI (14-period)                                                │
+   │  - MACD (12, 26, 9)                                               │
+   │  - Volume analysis                                                │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+   ┌───────────────────────────────▼───────────────────────────────────┐
+   │  STEP 3: Query DeepSeek AI                                        │
+   │  - Send current conditions to AI                                  │
+   │  - Get sentiment analysis                                         │
+   │  - Get trade recommendation                                       │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+   ┌───────────────────────────────▼───────────────────────────────────┐
+   │  STEP 4: Aggregate Signals                                        │
+   │  - Combine RSI + MACD + AI signals                                │
+   │  - Calculate overall signal strength                              │
+   │  - Determine recommended action (BUY/SELL/HOLD)                   │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+   ┌───────────────────────────────▼───────────────────────────────────┐
+   │  STEP 5: Risk Management Check                                    │
+   │  - Check daily loss limit                                         │
+   │  - Check max exposure                                             │
+   │  - Calculate appropriate position size                            │
+   └───────────────────────────────┬───────────────────────────────────┘
+                                   │
+                          ┌────────▼────────┐
+                          │ CAN WE TRADE?   │
+                          └────────┬────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+              ┌─────▼─────┐                 ┌─────▼─────┐
+              │    YES    │                 │    NO     │
+              └─────┬─────┘                 └─────┬─────┘
+                    │                             │
+   ┌────────────────▼────────────────┐     ┌──────▼──────┐
+   │  STEP 6: Execute Trade          │     │  Log reason │
+   │  - Place order via WEEX API     │     │  and wait   │
+   │  - Set stop-loss                │     │  for next   │
+   │  - Set take-profit              │     │  cycle      │
+   │  - Send Telegram notification   │     └─────────────┘
+   └────────────────┬────────────────┘
+                    │
+   ┌────────────────▼────────────────┐
+   │  STEP 7: Monitor Position       │
+   │  - Track price movement         │
+   │  - Adjust trailing stop         │
+   │  - Check for SL/TP hit          │
+   └────────────────┬────────────────┘
+                    │
+   ┌────────────────▼────────────────┐
+   │  STEP 8: Position Closed        │
+   │  - Record P&L                   │
+   │  - Update daily stats           │
+   │  - Send notification            │
+   │  - Return to START              │
+   └─────────────────────────────────┘
+
+================================================================================
+9. CONCLUSION
+================================================================================
+
+Protocol-14 represents a sophisticated approach to algorithmic cryptocurrency
+trading that combines:
+
+1. MULTIPLE STRATEGIES for different market conditions
+   - Grid Trading for ranging markets
+   - Peak Hunter for volatile reversals
+   - Momentum Scalper for trending markets
+
+2. COMPREHENSIVE TECHNICAL ANALYSIS
+   - RSI for overbought/oversold detection
+   - MACD for trend and momentum
+   - Volume analysis for confirmation
+
+3. AI-ENHANCED DECISION MAKING
+   - DeepSeek sentiment analysis
+   - Trade confirmation from AI
+   - Contrarian strategy using extreme sentiment
+
+4. ROBUST RISK MANAGEMENT
+   - Position sizing based on risk
+   - Mandatory stop-losses
+   - Daily loss limits
+   - Exposure tracking
+
+5. PROFIT OPTIMIZATION
+   - Favorable risk-reward ratios
+   - Dynamic position sizing
+   - Trailing stops to lock in profits
+
+This combination creates a trading system that:
+- Adapts to changing market conditions
+- Uses AI to gain an edge over pure technical traders
+- Protects capital through strict risk management
+- Maximizes returns through optimal position sizing
+
+================================================================================
+                    PROTOCOL-14 TEAM - WEEX AI HACKATHON 2026
+                          "Trading Smarter with AI"
+================================================================================
