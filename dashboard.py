@@ -178,6 +178,38 @@ def get_volatile_prices():
     return prices
 
 
+def get_fear_greed():
+    """Get Fear & Greed Index from Alternative.me"""
+    try:
+        resp = requests.get("https://api.alternative.me/fng/", timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()['data'][0]
+            return {
+                'value': int(data['value']),
+                'classification': data['value_classification'],
+                'timestamp': data['timestamp']
+            }
+    except:
+        pass
+    return {'value': 50, 'classification': 'Neutral', 'timestamp': ''}
+
+
+def get_market_global():
+    """Get global market data from CoinGecko"""
+    try:
+        resp = requests.get("https://api.coingecko.com/api/v3/global", timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()['data']
+            return {
+                'btc_dominance': data.get('market_cap_percentage', {}).get('btc', 0),
+                'market_change_24h': data.get('market_cap_change_percentage_24h_usd', 0),
+                'active_cryptos': data.get('active_cryptocurrencies', 0)
+            }
+    except:
+        pass
+    return {'btc_dominance': 0, 'market_change_24h': 0, 'active_cryptos': 0}
+
+
 def clear_screen():
     """Clear terminal screen"""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -195,6 +227,8 @@ def display_dashboard():
     trades = get_trade_history()
     peak_data = get_peak_trades()
     volatile_prices = get_volatile_prices()
+    fear_greed = get_fear_greed()
+    market_global = get_market_global()
     
     # Calculate P&L
     pnl = balance['equity'] - STARTING_BALANCE
@@ -202,10 +236,45 @@ def display_dashboard():
     
     # Header
     print("\n" + "═"*70)
-    print("  📊 WEEX HACKATHON DASHBOARD - LIVE MONITORING")
+    print("  📊 WEEX HACKATHON DASHBOARD - CONSERVATIVE GRID BOT")
     print("═"*70)
-    print(f"  ⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  ⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  🖥️  Server: 178.128.65.112")
     print("═"*70)
+    
+    # Fear & Greed Section
+    print("\n┌─────────────────────────────────────────────────────────────────┐")
+    print("│                   🦎 COINGECKO INTELLIGENCE                     │")
+    print("├─────────────────────────────────────────────────────────────────┤")
+    
+    # Fear & Greed emoji and color
+    fng_value = fear_greed['value']
+    if fng_value <= 25:
+        fng_emoji = "😱"
+        fng_status = "EXTREME FEAR - Bot cautious"
+    elif fng_value <= 45:
+        fng_emoji = "😰"
+        fng_status = "FEAR - Good buying opportunity"
+    elif fng_value <= 55:
+        fng_emoji = "😐"
+        fng_status = "NEUTRAL - Normal trading"
+    elif fng_value <= 75:
+        fng_emoji = "😊"
+        fng_status = "GREED - Take profits"
+    else:
+        fng_emoji = "🤑"
+        fng_status = "EXTREME GREED - Bot cautious"
+    
+    # Safety check
+    is_safe = 15 <= fng_value <= 85 and abs(market_global['market_change_24h']) < 8
+    safe_emoji = "✅" if is_safe else "⚠️"
+    
+    print(f"│  {fng_emoji} Fear & Greed: {fng_value}/100 ({fear_greed['classification']})             │")
+    print(f"│     {fng_status:<55}│")
+    print(f"│                                                                 │")
+    print(f"│  📈 BTC Dominance: {market_global['btc_dominance']:.1f}%                                  │")
+    print(f"│  📊 Market 24h: {market_global['market_change_24h']:+.2f}%                                     │")
+    print(f"│  {safe_emoji} Trading Safe: {'YES - Bot Active' if is_safe else 'NO - Bot Waiting'}                              │")
+    print("└─────────────────────────────────────────────────────────────────┘")
     
     # Balance Section
     print("\n┌─────────────────────────────────────────────────────────────────┐")
