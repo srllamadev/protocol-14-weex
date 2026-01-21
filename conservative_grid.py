@@ -406,22 +406,33 @@ class ConservativeGridBot:
             raw_size = notional / price
             size = round(raw_size / step) * step
             
-            # LONG: Cerca de soporte + RSI bajo
-            if position_in_range < 0.35 and rsi < 40:
+            # Log analysis for debugging
+            log_decision(f"📈 ANALYZING {symbol}", {
+                'type': 'analysis',
+                'symbol': symbol,
+                'price': price,
+                'rsi': rsi,
+                'position_in_range': position_in_range,
+                'support': support,
+                'resistance': resistance
+            })
+            
+            # LONG: Cerca de soporte + RSI bajo (RELAXED CRITERIA)
+            if position_in_range < 0.45 and rsi < 50:
                 print(f"\n📊 {symbol}:")
                 print(f"   Price: ${price:.4f}")
                 print(f"   RSI: {rsi:.1f}")
                 print(f"   Position in range: {position_in_range:.0%}")
-                print(f"   Signal: 🟢 LONG (near support, RSI low)")
+                print(f"   Signal: 🟢 LONG (near support, RSI favorable)")
                 return symbol, 'buy', price, size
             
-            # SHORT: Cerca de resistencia + RSI alto
-            if position_in_range > 0.65 and rsi > 60:
+            # SHORT: Cerca de resistencia + RSI alto (RELAXED CRITERIA)
+            if position_in_range > 0.55 and rsi > 50:
                 print(f"\n📊 {symbol}:")
                 print(f"   Price: ${price:.4f}")
                 print(f"   RSI: {rsi:.1f}")
                 print(f"   Position in range: {position_in_range:.0%}")
-                print(f"   Signal: 🔴 SHORT (near resistance, RSI high)")
+                print(f"   Signal: 🔴 SHORT (near resistance, RSI favorable)")
                 return symbol, 'sell', price, size
         
         return None
