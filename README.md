@@ -1,4 +1,4 @@
-# 🤖 Protocol-14 WEEX AI Trading Bot
+# Protocol-14 WEEX AI Trading Bot
 
 <p align="center">
   <b>AI-Powered Algorithmic Trading System for WEEX Futures</b><br>
@@ -541,5 +541,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  <b>Built with ❤️ by Protocol-14 Team for WEEX AI Trading Hackathon 2026</b>
+  <b>Protocol-14 for WEEX AI Trading Hackathon 2026</b>
 </p>
