@@ -14,7 +14,7 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#-overview)
 - [Features](#-features)
@@ -48,7 +48,7 @@ Protocol-14 is a sophisticated AI-powered trading bot designed for the WEEX cryp
 
 ---
 
-## ✨ Features
+## Features
 
 ### Trading Strategies
 | Strategy | Description | Best For |
@@ -70,7 +70,7 @@ Protocol-14 is a sophisticated AI-powered trading bot designed for the WEEX cryp
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 protocol-14-weex/
@@ -108,7 +108,7 @@ protocol-14-weex/
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -358,7 +358,7 @@ client.test_connectivity()              # Test API connection
 
 ---
 
-## 🚀 Running the Bot
+## Running the Bot
 
 ### Quick Start
 
@@ -528,7 +528,7 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
