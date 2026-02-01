@@ -182,9 +182,9 @@ python check_ip.py
 
 Expected output when IP is whitelisted:
 ```
-🌐 Your Current Public IP: x.x.x.x
-🔐 Testing Private API (Account Assets)...
-✅ Status: 200 - IP is whitelisted!
+ Your Current Public IP: x.x.x.x
+ Testing Private API (Account Assets)...
+ Status: 200 - IP is whitelisted!
 ```
 
 ---
