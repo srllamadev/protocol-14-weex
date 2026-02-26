@@ -1,4 +1,4 @@
-# 🚀 Deployment Instructions (Digital Ocean VPS)
+# Deployment Instructions (Digital Ocean VPS)
 
 ## 1. Prepare Files
 Run the bundle script locally to create a zip file:
